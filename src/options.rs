@@ -1,4 +1,3 @@
-use crate::database::Database;
 use crate::error::Error;
 use futures_core::future::BoxFuture;
 use std::fmt::{self, Debug, Formatter};
@@ -41,11 +40,11 @@ use crate::Pool;
 /// parameter everywhere, and `Box` is in the prelude so it doesn't need to be manually imported,
 /// so having the closure return `Pin<Box<dyn Future>` directly is the path of least resistance from
 /// the perspectives of both API designer and consumer.
-pub struct PoolOptions<DB: Database> {
+pub struct PoolOptions<C: Connection> {
     pub(crate) test_before_acquire: bool,
     pub(crate) after_connect: Option<
         Arc<
-            dyn Fn(&mut DB::Connection, PoolConnectionMetadata) -> BoxFuture<'_, Result<(), Error>>
+            dyn Fn(&mut C, PoolConnectionMetadata) -> BoxFuture<'_, Result<(), Error>>
                 + 'static
                 + Send
                 + Sync,
@@ -54,7 +53,7 @@ pub struct PoolOptions<DB: Database> {
     pub(crate) before_acquire: Option<
         Arc<
             dyn Fn(
-                    &mut DB::Connection,
+                    &mut C,
                     PoolConnectionMetadata,
                 ) -> BoxFuture<'_, Result<bool, Error>>
                 + 'static
@@ -65,7 +64,7 @@ pub struct PoolOptions<DB: Database> {
     pub(crate) after_release: Option<
         Arc<
             dyn Fn(
-                    &mut DB::Connection,
+                    &mut C,
                     PoolConnectionMetadata,
                 ) -> BoxFuture<'_, Result<bool, Error>>
                 + 'static
@@ -80,13 +79,13 @@ pub struct PoolOptions<DB: Database> {
     pub(crate) idle_timeout: Option<Duration>,
     pub(crate) fair: bool,
 
-    pub(crate) parent_pool: Option<Pool<DB>>,
+    pub(crate) parent_pool: Option<Pool<C>>,
 }
 
 // Manually implement `Clone` to avoid a trait bound issue.
 //
 // See: https://github.com/launchbadge/sqlx/issues/2548
-impl<DB: Database> Clone for PoolOptions<DB> {
+impl<C: Connection> Clone for PoolOptions<C> {
     fn clone(&self) -> Self {
         PoolOptions {
             test_before_acquire: self.test_before_acquire,
@@ -120,13 +119,13 @@ pub struct PoolConnectionMetadata {
     pub idle_for: Duration,
 }
 
-impl<DB: Database> Default for PoolOptions<DB> {
+impl<C: Connection> Default for PoolOptions<C> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<DB: Database> PoolOptions<DB> {
+impl<C: Connection> PoolOptions<C> {
     /// Returns a default "sane" configuration, suitable for testing or light-duty applications.
     ///
     /// Production applications will likely want to at least modify
@@ -319,7 +318,7 @@ impl<DB: Database> PoolOptions<DB> {
     where
         // We're passing the `PoolConnectionMetadata` here mostly for future-proofing.
         // `age` and `idle_for` are obviously not useful for fresh connections.
-        for<'c> F: Fn(&'c mut DB::Connection, PoolConnectionMetadata) -> BoxFuture<'c, Result<(), Error>>
+        for<'c> F: Fn(&'c mut C, PoolConnectionMetadata) -> BoxFuture<'c, Result<(), Error>>
             + 'static
             + Send
             + Sync,
@@ -356,7 +355,7 @@ impl<DB: Database> PoolOptions<DB> {
     /// For a discussion on why `Box::pin()` is required, see [the type-level docs][Self].
     pub fn before_acquire<F>(mut self, callback: F) -> Self
     where
-        for<'c> F: Fn(&'c mut DB::Connection, PoolConnectionMetadata) -> BoxFuture<'c, Result<bool, Error>>
+        for<'c> F: Fn(&'c mut C, PoolConnectionMetadata) -> BoxFuture<'c, Result<bool, Error>>
             + 'static
             + Send
             + Sync,
@@ -390,7 +389,7 @@ impl<DB: Database> PoolOptions<DB> {
     ///
     pub fn after_release<F>(mut self, callback: F) -> Self
     where
-        for<'c> F: Fn(&'c mut DB::Connection, PoolConnectionMetadata) -> BoxFuture<'c, Result<bool, Error>>
+        for<'c> F: Fn(&'c mut C, PoolConnectionMetadata) -> BoxFuture<'c, Result<bool, Error>>
             + 'static
             + Send
             + Sync,
@@ -407,7 +406,7 @@ impl<DB: Database> PoolOptions<DB> {
     /// If `self.max_connections` is greater than the setting the given pool was created with,
     /// or `self.fair` differs from the setting the given pool was created with.
     #[doc(hidden)]
-    pub fn parent(mut self, pool: Pool<DB>) -> Self {
+    pub fn parent(mut self, pool: Pool<C>) -> Self {
         self.parent_pool = Some(pool);
         self
     }
@@ -424,7 +423,7 @@ impl<DB: Database> PoolOptions<DB> {
     /// * MySQL: [`MySqlConnectOptions`][crate::mysql::MySqlConnectOptions]
     /// * SQLite: [`SqliteConnectOptions`][crate::sqlite::SqliteConnectOptions]
     /// * MSSQL: [`MssqlConnectOptions`][crate::mssql::MssqlConnectOptions]
-    pub async fn connect(self, url: &str) -> Result<Pool<DB>, Error> {
+    pub async fn connect(self, url: &str) -> Result<Pool<C>, Error> {
         self.connect_with(url.parse()?).await
     }
 
@@ -435,8 +434,8 @@ impl<DB: Database> PoolOptions<DB> {
     /// The total number of connections opened is <code>max(1, [min_connections][Self::min_connections])</code>.
     pub async fn connect_with(
         self,
-        options: <DB::Connection as Connection>::Options,
-    ) -> Result<Pool<DB>, Error> {
+        options: <C as Connection>::Options,
+    ) -> Result<Pool<C>, Error> {
         // Don't take longer than `acquire_timeout` starting from when this is called.
         let deadline = Instant::now() + self.acquire_timeout;
 
@@ -467,7 +466,7 @@ impl<DB: Database> PoolOptions<DB> {
     /// * MySQL: [`MySqlConnectOptions`][crate::mysql::MySqlConnectOptions]
     /// * SQLite: [`SqliteConnectOptions`][crate::sqlite::SqliteConnectOptions]
     /// * MSSQL: [`MssqlConnectOptions`][crate::mssql::MssqlConnectOptions]
-    pub fn connect_lazy(self, url: &str) -> Result<Pool<DB>, Error> {
+    pub fn connect_lazy(self, url: &str) -> Result<Pool<C>, Error> {
         Ok(self.connect_lazy_with(url.parse()?))
     }
 
@@ -475,13 +474,13 @@ impl<DB: Database> PoolOptions<DB> {
     ///
     /// If [`min_connections`][Self::min_connections] is set, a background task will be spawned to
     /// optimistically establish that many connections for the pool.
-    pub fn connect_lazy_with(self, options: <DB::Connection as Connection>::Options) -> Pool<DB> {
+    pub fn connect_lazy_with(self, options: <C as Connection>::Options) -> Pool<C> {
         // `min_connections` is guaranteed by the idle reaper now.
         Pool(PoolInner::new_arc(self, options))
     }
 }
 
-impl<DB: Database> Debug for PoolOptions<DB> {
+impl<C: Connection> Debug for PoolOptions<C> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("PoolOptions")
             .field("max_connections", &self.max_connections)

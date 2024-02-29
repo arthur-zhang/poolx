@@ -1,15 +1,15 @@
-use crate::database::Database;
 use std::ops::{Deref, DerefMut};
+use crate::conn::Connection;
 use crate::PoolConnection;
 
-pub enum MaybePoolConnection<'c, DB: Database> {
+pub enum MaybePoolConnection<'c, C: Connection> {
     #[allow(dead_code)]
-    Connection(&'c mut DB::Connection),
-    PoolConnection(PoolConnection<DB>),
+    Connection(&'c mut C),
+    PoolConnection(PoolConnection<C>),
 }
 
-impl<'c, DB: Database> Deref for MaybePoolConnection<'c, DB> {
-    type Target = DB::Connection;
+impl<'c, C: Connection> Deref for MaybePoolConnection<'c, C> {
+    type Target = C;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -20,7 +20,7 @@ impl<'c, DB: Database> Deref for MaybePoolConnection<'c, DB> {
     }
 }
 
-impl<'c, DB: Database> DerefMut for MaybePoolConnection<'c, DB> {
+impl<'c, C: Connection> DerefMut for MaybePoolConnection<'c, C> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
@@ -30,14 +30,14 @@ impl<'c, DB: Database> DerefMut for MaybePoolConnection<'c, DB> {
     }
 }
 
-impl<'c, DB: Database> From<PoolConnection<DB>> for MaybePoolConnection<'c, DB> {
-    fn from(v: PoolConnection<DB>) -> Self {
+impl<'c, C: Connection> From<PoolConnection<C>> for MaybePoolConnection<'c, C> {
+    fn from(v: PoolConnection<C>) -> Self {
         MaybePoolConnection::PoolConnection(v)
     }
 }
 
-impl<'c, DB: Database> From<&'c mut DB::Connection> for MaybePoolConnection<'c, DB> {
-    fn from(v: &'c mut DB::Connection) -> Self {
+impl<'c, C: Connection> From<&'c mut C> for MaybePoolConnection<'c, C> {
+    fn from(v: &'c mut C) -> Self {
         MaybePoolConnection::Connection(v)
     }
 }

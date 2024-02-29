@@ -55,17 +55,6 @@
 //! [`Pool::begin`].
 
 use self::inner::PoolInner;
-#[cfg(all(
-    any(
-        feature = "postgres",
-        feature = "mysql",
-        feature = "mssql",
-        feature = "sqlite"
-    ),
-    feature = "any"
-))]
-use crate::any::{Any, AnyKind};
-use crate::database::Database;
 use crate::error::Error;
 use futures_core::FusedFuture;
 use futures_util::FutureExt;
@@ -85,7 +74,6 @@ pub mod maybe;
 mod connection;
 mod inner;
 mod options;
-mod database;
 mod error;
 mod conn;
 mod sync;
@@ -266,7 +254,7 @@ pub use self::maybe::MaybePoolConnection;
 ///
 /// Depending on the database server, a connection will have caches for all kinds of other data as
 /// well and queries will generally benefit from these caches being "warm" (populated with data).
-pub struct Pool<DB: Database>(pub(crate) Arc<PoolInner<DB>>);
+pub struct Pool<C: Connection>(pub(crate) Arc<PoolInner<C>>);
 
 /// A future that resolves when the pool is closed.
 ///
@@ -275,7 +263,7 @@ pub struct CloseEvent {
     listener: Option<EventListener>,
 }
 
-impl<DB: Database> Pool<DB> {
+impl<C: Connection> Pool<C> {
     /// Create a new connection pool with a default pool configuration and
     /// the given connection URL, and immediately establish one connection.
     ///
@@ -291,7 +279,7 @@ impl<DB: Database> Pool<DB> {
     ///
     /// See [`PoolOptions::new()`] for details.
     pub async fn connect(url: &str) -> Result<Self, Error> {
-        PoolOptions::<DB>::new().connect(url).await
+        PoolOptions::<C>::new().connect(url).await
     }
 
     /// Create a new connection pool with a default pool configuration and
@@ -302,9 +290,9 @@ impl<DB: Database> Pool<DB> {
     ///
     /// See [`PoolOptions::new()`] for details.
     pub async fn connect_with(
-        options: <DB::Connection as Connection>::Options,
+        options: <C as Connection>::Options,
     ) -> Result<Self, Error> {
-        PoolOptions::<DB>::new().connect_with(options).await
+        PoolOptions::<C>::new().connect_with(options).await
     }
 
     /// Create a new connection pool with a default pool configuration and
@@ -324,7 +312,7 @@ impl<DB: Database> Pool<DB> {
     ///
     /// See [`PoolOptions::new()`] for details.
     pub fn connect_lazy(url: &str) -> Result<Self, Error> {
-        PoolOptions::<DB>::new().connect_lazy(url)
+        PoolOptions::<C>::new().connect_lazy(url)
     }
 
     /// Create a new connection pool with a default pool configuration and
@@ -336,8 +324,8 @@ impl<DB: Database> Pool<DB> {
     /// For production applications, you'll likely want to make at least few tweaks.
     ///
     /// See [`PoolOptions::new()`] for details.
-    pub fn connect_lazy_with(options: <DB::Connection as Connection>::Options) -> Self {
-        PoolOptions::<DB>::new().connect_lazy_with(options)
+    pub fn connect_lazy_with(options: <C as Connection>::Options) -> Self {
+        PoolOptions::<C>::new().connect_lazy_with(options)
     }
 
     /// Retrieves a connection from the pool.
@@ -363,7 +351,7 @@ impl<DB: Database> Pool<DB> {
     ///
     /// This should eliminate any potential `.await` points between acquiring a connection and
     /// returning it.
-    pub fn acquire(&self) -> impl Future<Output = Result<PoolConnection<DB>, Error>> + 'static {
+    pub fn acquire(&self) -> impl Future<Output=Result<PoolConnection<C>, Error>> + 'static {
         let shared = self.0.clone();
         async move { shared.acquire().await.map(|conn| conn.reattach()) }
     }
@@ -372,7 +360,7 @@ impl<DB: Database> Pool<DB> {
     ///
     /// Returns `None` immediately if there are no idle connections available in the pool
     /// or there are tasks waiting for a connection which have yet to wake.
-    pub fn try_acquire(&self) -> Option<PoolConnection<DB>> {
+    pub fn try_acquire(&self) -> Option<PoolConnection<C>> {
         self.0.try_acquire().map(|conn| conn.into_live().reattach())
     }
 
@@ -397,7 +385,7 @@ impl<DB: Database> Pool<DB> {
     /// spawned by `Pool` internally and so may be unpredictable otherwise.
     ///
     /// `.close()` may be safely called and `.await`ed on multiple handles concurrently.
-    pub fn close(&self) -> impl Future<Output = ()> + '_ {
+    pub fn close(&self) -> impl Future<Output=()> + '_ {
         self.0.close()
     }
 
@@ -499,7 +487,7 @@ impl<DB: Database> Pool<DB> {
     }
 
     /// Gets a clone of the connection options for this pool
-    pub fn connect_options(&self) -> Arc<<DB::Connection as Connection>::Options> {
+    pub fn connect_options(&self) -> Arc<<C as Connection>::Options> {
         self.0
             .connect_options
             .read()
@@ -509,7 +497,7 @@ impl<DB: Database> Pool<DB> {
 
     /// Updates the connection options this pool will use when opening any future connections.  Any
     /// existing open connection in the pool will be left as-is.
-    pub fn set_connect_options(&self, connect_options: <DB::Connection as Connection>::Options) {
+    pub fn set_connect_options(&self, connect_options: <C as Connection>::Options) {
         // technically write() could also panic if the current thread already holds the lock,
         // but because this method can't be re-entered by the same thread that shouldn't be a problem
         let mut guard = self
@@ -521,41 +509,20 @@ impl<DB: Database> Pool<DB> {
     }
 
     /// Get the options for this pool
-    pub fn options(&self) -> &PoolOptions<DB> {
+    pub fn options(&self) -> &PoolOptions<C> {
         &self.0.options
     }
 }
 
-#[cfg(all(
-    any(
-        feature = "postgres",
-        feature = "mysql",
-        feature = "mssql",
-        feature = "sqlite"
-    ),
-    feature = "any"
-))]
-impl Pool<Any> {
-    /// Returns the database driver currently in-use by this `Pool`.
-    ///
-    /// Determined by the connection URL.
-    pub fn any_kind(&self) -> AnyKind {
-        self.0
-            .connect_options
-            .read()
-            .expect("write-lock holder panicked")
-            .kind()
-    }
-}
 
 /// Returns a new [Pool] tied to the same shared connection pool.
-impl<DB: Database> Clone for Pool<DB> {
+impl<C: Connection> Clone for Pool<C> {
     fn clone(&self) -> Self {
         Self(Arc::clone(&self.0))
     }
 }
 
-impl<DB: Database> fmt::Debug for Pool<DB> {
+impl<C: Connection> fmt::Debug for Pool<C> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt.debug_struct("Pool")
             .field("size", &self.0.size())
@@ -597,7 +564,7 @@ impl CloseEvent {
             // is not allowed on stable Rust yet.
             self.poll_unpin(cx).map(|_| Err(Error::PoolClosed))
         })
-        .await
+            .await
     }
 }
 
@@ -628,7 +595,7 @@ impl FusedFuture for CloseEvent {
 /// get the time between the deadline and now and use that as our timeout
 ///
 /// returns `Error::PoolTimedOut` if the deadline is in the past
-fn deadline_as_timeout<DB: Database>(deadline: Instant) -> Result<Duration, Error> {
+fn deadline_as_timeout(deadline: Instant) -> Result<Duration, Error> {
     deadline
         .checked_duration_since(Instant::now())
         .ok_or(Error::PoolTimedOut)
@@ -640,8 +607,8 @@ fn assert_pool_traits() {
     fn assert_send_sync<T: Send + Sync>() {}
     fn assert_clone<T: Clone>() {}
 
-    fn assert_pool<DB: Database>() {
-        assert_send_sync::<Pool<DB>>();
-        assert_clone::<Pool<DB>>();
+    fn assert_pool<C: Connection>() {
+        assert_send_sync::<Pool<C>>();
+        assert_clone::<Pool<C>>();
     }
 }

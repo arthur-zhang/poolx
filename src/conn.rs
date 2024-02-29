@@ -1,13 +1,12 @@
 use std::fmt::Debug;
 use std::str::FromStr;
+
 use futures_core::future::BoxFuture;
 use url::Url;
-use crate::database::Database;
+
 use crate::error::Error;
 
-pub trait Connection: Send {
-    type Database: Database;
-
+pub trait Connection: 'static + Send {
     type Options: ConnectOptions<Connection=Self>;
 
     /// Explicitly close this database connection.
@@ -30,10 +29,9 @@ pub trait Connection: Send {
 
     fn close_hard(self) -> BoxFuture<'static, Result<(), Error>>;
     fn ping(&mut self) -> BoxFuture<'_, Result<(), Error>>;
-
 }
 
-pub trait ConnectOptions: 'static + Send + Sync + FromStr<Err = Error> + Debug + Clone {
+pub trait ConnectOptions: 'static + Send + Sync + FromStr<Err=Error> + Debug + Clone {
     type Connection: Connection + ?Sized;
 
     /// Parse the `ConnectOptions` from a URL.
@@ -43,6 +41,4 @@ pub trait ConnectOptions: 'static + Send + Sync + FromStr<Err = Error> + Debug +
     fn connect(&self) -> BoxFuture<'_, Result<Self::Connection, Error>>
         where
             Self::Connection: Sized;
-
-
 }
