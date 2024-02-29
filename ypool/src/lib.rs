@@ -54,19 +54,30 @@
 //! [`Pool::acquire`] or
 //! [`Pool::begin`].
 
-use self::inner::PoolInner;
-use crate::error::Error;
-use futures_core::FusedFuture;
-use futures_util::FutureExt;
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
-use event_listener::EventListener;
-use crate::conn::Connection;
 
+use event_listener::EventListener;
+pub use futures_core;
+use futures_core::FusedFuture;
+use futures_util::FutureExt;
+pub use url;
+
+pub use conn::*;
+pub use error::*;
+
+
+pub use self::connection::PoolConnection;
+use self::inner::PoolInner;
+#[doc(hidden)]
+pub use self::maybe::MaybePoolConnection;
+pub use self::options::{PoolConnectionMetadata, PoolOptions};
+
+mod conn;
 
 #[macro_use]
 pub mod maybe;
@@ -75,17 +86,12 @@ mod connection;
 mod inner;
 mod options;
 mod error;
-mod conn;
+
+
 mod sync;
 mod my;
 
-pub use self::connection::PoolConnection;
-pub use self::options::{PoolConnectionMetadata, PoolOptions};
-
-#[doc(hidden)]
-pub use self::maybe::MaybePoolConnection;
-
-/// An asynchronous pool of SQLx database connections.
+/// An asynchronous pool of connections.
 ///
 /// Create a pool with [Pool::connect] or [Pool::connect_with] and then call [Pool::acquire]
 /// to get a connection from the pool; when the connection is dropped it will return to the pool
@@ -122,15 +128,6 @@ pub use self::maybe::MaybePoolConnection;
 /// calls to [Pool::acquire] to return [Error::PoolClosed], and waits until all connections have
 /// been returned to the pool and gracefully closed.
 ///
-/// Type aliases are provided for each database to make it easier to sprinkle `Pool` through
-/// your codebase:
-///
-/// * [MssqlPool][crate::mssql::MssqlPool] (MSSQL)
-/// * [MySqlPool][crate::mysql::MySqlPool] (MySQL)
-/// * [PgPool][crate::postgres::PgPool] (PostgreSQL)
-/// * [SqlitePool][crate::sqlite::SqlitePool] (SQLite)
-///
-/// [web::Data]: https://docs.rs/actix-web/3/actix_web/web/struct.Data.html
 ///
 /// ### Note: Drop Behavior
 /// Due to a lack of async `Drop`, dropping the last `Pool` handle may not immediately clean
