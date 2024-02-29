@@ -15,7 +15,7 @@ pub struct AsyncSemaphore {
 }
 
 impl AsyncSemaphore {
-    pub fn new(fair: bool, permits: usize) -> Self {
+    pub fn new(permits: usize) -> Self {
         AsyncSemaphore {
             inner: {
                 tokio::sync::Semaphore::new(permits)

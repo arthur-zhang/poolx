@@ -46,7 +46,7 @@ impl<C: Connection> PoolInner<C> {
         let pool = Self {
             connect_options: RwLock::new(Arc::new(connect_options)),
             idle_conns: ArrayQueue::new(capacity),
-            semaphore: AsyncSemaphore::new(options.fair, semaphore_capacity),
+            semaphore: AsyncSemaphore::new(semaphore_capacity),
             size: AtomicU32::new(0),
             num_idle: AtomicUsize::new(0),
             is_closed: AtomicBool::new(false),
