@@ -1,9 +1,12 @@
 [package]
 name = "poolx"
-version = "0.1.0"
-edition = "2021"
-description = "A generic async connection pool with many features"
-license = "Apache-2.0"
+documentation = "https://docs.rs/poolx"
+description = "MySQL driver implementation for SQLx. Not for direct use; see the `sqlx` crate for details."
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
 
 [dependencies]
 crossbeam = "0.8.4"
