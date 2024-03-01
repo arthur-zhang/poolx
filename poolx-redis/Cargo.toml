@@ -1,11 +1,11 @@
 [package]
-name = "ypool-redis"
+name = "poolx-redis"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 redis = { version = "0.24.0", features = ["tokio-comp"] }
-ypool = { path = "../ypool" }
+poolx = { path = "../poolx" }
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }

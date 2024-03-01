@@ -89,7 +89,6 @@ mod error;
 
 
 mod sync;
-mod my;
 
 /// An asynchronous pool of connections.
 ///

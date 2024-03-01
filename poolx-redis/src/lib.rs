@@ -4,10 +4,10 @@ use std::str::FromStr;
 
 use futures_core::future::BoxFuture;
 use redis::aio::ConnectionLike;
-use redis::Client;
+use redis::{Client, Cmd, Pipeline, RedisFuture, Value};
 
-use ypool::{Connection, ConnectOptions, futures_core, url};
-use ypool::url::Url;
+use poolx::{Connection, ConnectOptions, futures_core, url};
+use poolx::url::Url;
 
 #[derive(Debug, Clone)]
 pub struct RedisConnectionOption {
@@ -18,10 +18,10 @@ pub struct RedisConnectionOption {
 impl RedisConnectionOption {}
 
 impl FromStr for RedisConnectionOption {
-    type Err = ypool::Error;
+    type Err = poolx::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let url = s.parse::<Url>().map_err(|e| ypool::Error::Configuration(Box::new(e)))?;
+        let url = s.parse::<Url>().map_err(|e| poolx::Error::Configuration(Box::new(e)))?;
         Self::from_url(&url)
     }
 }
@@ -29,24 +29,24 @@ impl FromStr for RedisConnectionOption {
 impl ConnectOptions for RedisConnectionOption {
     type Connection = RedisConnection;
 
-    fn from_url(url: &url::Url) -> Result<Self, ypool::Error> {
-        let client = Client::open(url.clone()).map_err(|e| ypool::Error::Configuration(Box::new(e)))?;
+    fn from_url(url: &url::Url) -> Result<Self, poolx::Error> {
+        let client = Client::open(url.clone()).map_err(|e| poolx::Error::Configuration(Box::new(e)))?;
         Ok(Self {
             url: url.clone(),
             client,
         })
     }
 
-    fn connect(&self) -> BoxFuture<'_, Result<Self::Connection, ypool::Error>> where Self::Connection: Sized {
+    fn connect(&self) -> BoxFuture<'_, Result<Self::Connection, poolx::Error>> where Self::Connection: Sized {
         Box::pin(async move {
-            let conn = self.client.get_async_connection().await.map_err(|e| ypool::Error::Io(std::io::Error::from(ErrorKind::ConnectionReset)))?;
+            let conn = self.client.get_async_connection().await.map_err(|e| poolx::Error::Io(std::io::Error::from(ErrorKind::ConnectionReset)))?;
             Ok(RedisConnection { inner: conn })
         })
     }
 }
 
 pub struct RedisConnection {
-    pub inner: redis::aio::Connection,
+    inner: redis::aio::Connection,
 }
 
 impl AsMut<redis::aio::Connection> for RedisConnection {
@@ -59,40 +59,53 @@ impl AsMut<redis::aio::Connection> for RedisConnection {
 impl Connection for RedisConnection {
     type Options = RedisConnectionOption;
 
-    fn close(mut self) -> BoxFuture<'static, Result<(), ypool::Error>> {
+    fn close(mut self) -> BoxFuture<'static, Result<(), poolx::Error>> {
         Box::pin(async move {
             self.inner.req_packed_command(&redis::cmd("QUIT")).await.map_err(|e| std::io::Error::new(ErrorKind::ConnectionReset, e.to_string()))?;
             Ok(())
         })
     }
 
-    fn close_hard(self) -> BoxFuture<'static, Result<(), ypool::Error>> {
+    fn close_hard(self) -> BoxFuture<'static, Result<(), poolx::Error>> {
         Box::pin(async move {
             Ok(())
         })
     }
 
-    fn ping(&mut self) -> BoxFuture<'_, Result<(), ypool::Error>> {
+    fn ping(&mut self) -> BoxFuture<'_, Result<(), poolx::Error>> {
         Box::pin(async move {
             let pong: String = redis::cmd("PING").query_async(&mut self.inner).await.map_err(|e| std::io::Error::new(ErrorKind::ConnectionReset, e.to_string()))?;
             match pong.as_str() {
                 "PONG" => Ok(()),
-                _ => Err(ypool::Error::ResponseError),
+                _ => Err(poolx::Error::ResponseError),
             }
         })
     }
 }
 
+impl ConnectionLike for RedisConnection{
+    fn req_packed_command<'a>(&'a mut self, cmd: &'a Cmd) -> RedisFuture<'a, Value> {
+        self.inner.req_packed_command(cmd)
+    }
+
+    fn req_packed_commands<'a>(&'a mut self, cmd: &'a Pipeline, offset: usize, count: usize) -> RedisFuture<'a, Vec<Value>> {
+        self.inner.req_packed_commands(cmd, offset, count)
+    }
+
+    fn get_db(&self) -> i64 {
+        self.inner.get_db()
+    }
+}
 #[cfg(test)]
 mod tests {
     use redis::cmd;
 
-    use ypool::{Pool, PoolOptions};
+    use poolx::{Pool, PoolOptions};
 
     use crate::RedisConnection;
 
     #[tokio::test]
-    async fn test_redis_connection_option_from_str() {
+    async fn test_redis_connection_pool() {
         let url = "redis://:foobared@127.0.0.1:6379";
         let option = url.parse::<super::RedisConnectionOption>().unwrap();
 
@@ -105,7 +118,7 @@ mod tests {
 
         for i in 0..10 {
             let mut conn = pool.acquire().await.unwrap();
-            let reply: String = cmd("PING").query_async(&mut conn.inner).await.unwrap();
+            let reply: String = cmd("PING").query_async(conn.as_mut()).await.unwrap();
             println!("reply: {}", reply);
         }
     }
