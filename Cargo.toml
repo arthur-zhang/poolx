@@ -1,1 +1,13 @@
-workspace = { members = ["poolx", "poolx-example", "poolx-mysql", "poolx-redis"] }
+[workspace]
+members = ["poolx", "poolx-example", "poolx-mysql", "poolx-redis"]
+
+[workspace.package]
+version = "0.1.2"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/arthur-zhang/poolx"
+keywords = ["database", "async", "mysql", "redis"]
+categories = ["pool", "asynchronous"]
+authors = [
+    "Arthur Zhang <happyzhangya@gmail.com>",
+]
