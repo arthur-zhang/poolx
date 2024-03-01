@@ -1,7 +1,12 @@
 [package]
 name = "poolx-redis"
-version = "0.1.0"
-edition = "2021"
+documentation = "https://docs.rs/poolx"
+description = "poolx for redis, with many features like idle connection checking and reaping, healthcheck, and more."
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+authors.workspace = true
+repository.workspace = true
 
 [dependencies]
 redis = { version = "0.24.0", features = ["tokio-comp"] }
