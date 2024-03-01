@@ -1,9 +1,16 @@
+<<<<<<< HEAD
 [workspace]
 members = ["poolx", "poolx-example", "poolx-mysql", "poolx-redis"]
 
 [workspace.package]
 version = "0.1.2"
 edition = "2021"
+=======
+workspace = { members = ["poolx", "poolx-example", "poolx-mysql", "poolx-redis"] }
+
+[workspace.package]
+version = "0.1.1"
+>>>>>>> 67f730a136f658125fe47b0d00ebb71fdbc5ee2a
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/arthur-zhang/poolx"
 keywords = ["database", "async", "mysql", "redis"]
