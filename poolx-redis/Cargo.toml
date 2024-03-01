@@ -10,7 +10,7 @@ repository.workspace = true
 
 [dependencies]
 redis = { version = "0.24.0", features = ["tokio-comp"] }
-poolx = { path = "../poolx" }
+poolx = { version = "0.1.2" }
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }
