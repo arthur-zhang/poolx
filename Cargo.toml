@@ -1,1 +1,1 @@
-workspace = { members = ["poolx", "poolx-mysql", "poolx-redis"] }
+workspace = { members = ["poolx", "poolx-example", "poolx-mysql", "poolx-redis"] }
