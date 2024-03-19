@@ -244,20 +244,20 @@ impl<C: Connection> Floating<C, Live<C>> {
         // returned to the pool; also of course, if it was dropped due to an error
         // this is simply a band-aid as SQLx-next connections should be able
         // to recover from cancellations
-        if let Err(error) = self.raw.ping().await {
-            tracing::warn!(
-                %error,
-                "error occurred while testing the connection on-release",
-            );
-
-            // Connection is broken, don't try to gracefully close.
-            self.close_hard().await;
-            false
-        } else {
+        // if let Err(error) = self.raw.ping().await {
+        //     tracing::warn!(
+        //         %error,
+        //         "error occurred while testing the connection on-release",
+        //     );
+        //
+        //     // Connection is broken, don't try to gracefully close.
+        //     self.close_hard().await;
+        //     false
+        // } else {
             // if the connection is still viable, release it to the pool
             self.release();
             true
-        }
+        // }
     }
 
     pub async fn close(self) {

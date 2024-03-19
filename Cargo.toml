@@ -2,7 +2,7 @@
 members = ["poolx", "poolx-example", "poolx-mysql", "poolx-redis"]
 
 [workspace.package]
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 workspace = { members = ["poolx", "poolx-example", "poolx-mysql", "poolx-redis"] }
 license = "MIT OR Apache-2.0"

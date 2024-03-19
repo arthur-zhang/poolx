@@ -9,6 +9,7 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
+anyhow = "1.0.81"
 crossbeam = "0.8.4"
 crossbeam-queue = "0.3.11"
 either = "1.10.0"

@@ -28,4 +28,7 @@ pub enum Error {
 
     #[error("error response from server")]
     ResponseError,
+
+    #[error("error with connection")]
+    Other(#[from] anyhow::Error),
 }
